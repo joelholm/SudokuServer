@@ -50,7 +50,7 @@ class Sudoku:
                 self.crbMap[i]['row'][j] = False
                 self.crbMap[i]['box'][j] = False
 
-
+    #TODO: This only is suppose to be called once, probably bad design
     def makePuzzle(self, difficulty):
         #Make a puzzle key
         self.generateKey()
@@ -85,7 +85,7 @@ class Sudoku:
                 possiblePuzzle = PuzzleSolver.findSolutions(self, self.boxes[randBoxNum], space, i)
                 if possiblePuzzle != None:
                     #if removing this number leads to multiple solutions, re-place the number and continue
-                    self.setNum(i, space, randBoxNum)
+                    self.setNum(i, randBoxNum, space)
                 if self.numSquaresFilledIn < difficultyConfig[difficulty]:
                     return
 
@@ -100,7 +100,7 @@ class Sudoku:
         self.setPuzzle(puzzleKey)
         #load into key
         for i in range(9):
-            self.keyBoxes.append([])
+            self.keyBoxes.append(SudokuBox(i))
             for j in range(9):
                 self.keyBoxes[i].setNum(self.boxes[i].spaces[j], j)
 
@@ -111,25 +111,25 @@ class Sudoku:
         i = 0
         for j in range(9):
             randNum = random.randint(0, len(orderedList) - 1)
-            self.setNum(orderedList[randNum], j, box.boxNum)
+            self.setNum(orderedList[randNum], box.boxNum, j)
             orderedList.pop(randNum)
 
     def createCopy(self):
         copySudoku = Sudoku()
         for i in range(9):
             for j in range(9):
-                copySudoku.setNum(self.boxes[i].spaces[j], j, i)
+                copySudoku.setNum(self.boxes[i].spaces[j], i, j)
         return copySudoku
 
     def setPuzzle(self, puzzle):
         for i in range(9):
             for j in range(9):
-                self.setNum(puzzle.boxes[i].spaces[j], j, i)
+                self.setNum(puzzle.boxes[i].spaces[j], i, j)
 
-    def isComplete(self):
+    def isGameOver(self):
         return (self.numSquaresFilledIn == 81)
 
-    def setNum(self, num, space, boxNum):
+    def setNum(self, num, boxNum, space):
         if num == 0:
             return
         self.numSquaresFilledIn += 1
@@ -138,6 +138,22 @@ class Sudoku:
         self.crbMap[num]['column'][((boxNum % 3) * 3 + space % 3)] = True
         self.crbMap[num]['row'][((boxNum // 3) * 3 + (space // 3))] = True
         self.crbMap[num]['box'][boxNum] = True
+
+    def isValidMove(self, num, boxNum, space):
+        if self.keyBoxes[boxNum].spaces[space] == num:
+            return True
+        return False
+
+    def getJSONBoard(self):
+        response = {
+            "puzzle":[],
+            "isGameOver": self.isGameOver()
+        }
+        for box in range(9):
+            response["puzzle"].append([])
+            for space in range(9):
+                response["puzzle"][box].append(self.boxes[box].spaces[space])
+        return response
 
     def printAll(self):
         for i in range(3):
@@ -161,7 +177,7 @@ class PuzzleSolver:
     #  2. Dominos
 
     def solvePuzzle(puzzle):
-        if puzzle.isComplete():
+        if puzzle.isGameOver():
             return puzzle
         method1 = False
         #method 1: Check for boxes with a single space open for number n
@@ -174,7 +190,7 @@ class PuzzleSolver:
                     return puzzle
                 #method 1
                 if len(availableSpaces) == 1:
-                    puzzle.setNum(n, availableSpaces[0], box.boxNum)
+                    puzzle.setNum(n, box.boxNum, availableSpaces[0])
                     method1 = True
         if method1:
             #Don't attempt methods 2,3,4 until method 1 is out of options
@@ -198,7 +214,7 @@ class PuzzleSolver:
                     solution = None
                     for i in range(k):
                         puzzleCopy = puzzle.createCopy()
-                        puzzleCopy.setNum(n, availableSpaces[i], box.boxNum)
+                        puzzleCopy.setNum(n, box.boxNum, availableSpaces[i])
                         solution = PuzzleSolver.solvePuzzle(puzzleCopy)
                         if solution != None and solution.isValid:
                             #found a valid puzzle, keep returning it
@@ -257,74 +273,12 @@ class PuzzleSolver:
             if i != num and numPossible:
                 #attempt to solve the puzzle with that number in
                 puzzleCopy = puzzle.createCopy()
-                puzzleCopy.setNum(i, space, box.boxNum)
+                puzzleCopy.setNum(i, box.boxNum, space)
                 solution = PuzzleSolver.solvePuzzle(puzzleCopy)
                 if solution.isValid:
-                    #return the puzzle with multiple solutions 
+                    #return the puzzle with multiple solutions
                     return puzzle
         return None
-
-def puzzleResearch():
-    #Make a puzzle key
-    puzzle = Sudoku()
-    puzzle.generateKey()
-    # puzzle = PuzzleSolver.solvePuzzle(puzzle)
-    puzzle.printAll()
-
-    boxArray = []
-    randBoxArray = []
-    for i in range(9):
-        boxArray.append([])
-        for j in range(9):
-            boxArray[i].append(j)
-    for i in range(9):
-        randBoxArray.append([])
-        for j in range(9):
-            randIndex = random.randint(0, len(boxArray[i]) - 1)
-            randBoxArray[i].append(boxArray[i][randIndex])
-            boxArray[i].pop(randIndex)
-    firstLock = True
-    for x in range(9):
-        for i in range(1,10):
-            #pick a random square and remove the number i
-            randBoxNum = randBoxArray[i - 1][x]
-            space = 0
-            for j in range(9):
-                if puzzle.boxes[randBoxNum].spaces[j] == i:
-                    space = j
-                    puzzle.boxes[randBoxNum].spaces[j] = 0
-            puzzle.numSquaresFilledIn -= 1
-            puzzle.crbMap[i]['column'][((randBoxNum % 3) * 3 + space % 3)] = False
-            puzzle.crbMap[i]['row'][((randBoxNum // 3) * 3 + (space // 3))] = False
-            puzzle.crbMap[i]['box'][randBoxNum] = False
-            possiblePuzzles = findSolutions(puzzle, puzzle.boxes[randBoxNum], space, i)
-            if possiblePuzzles != None:
-                #if removing this number leads to multiple solutions, re-place the number and continue
-                puzzle.setNum(i, space, randBoxNum)
-                if firstLock:
-                    print("First difficulty, given:", puzzle.numSquaresFilledIn)
-                    firstLock = False
-                    puzzle.printAll()
-    print("Last difficulty, given:", puzzle.numSquaresFilledIn)
-    puzzle.printAll()
-
-def findSolutions(puzzle, box, space, num):
-    #for every number but num
-    for i in range(1,10):
-        availableSpaces = PuzzleSolver.findAvailableSpaces(puzzle, box, i)
-        numPossible = False
-        for aSpace in availableSpaces:
-            if aSpace == space:
-                numPossible = True
-        if i != num and numPossible:
-            #attempt to solve the puzzle with that number in
-            puzzleCopy = puzzle.createCopy()
-            puzzleCopy.setNum(i, space, box.boxNum)
-            solution = PuzzleSolver.solvePuzzle(puzzleCopy)
-            if solution.isValid:
-                return puzzle
-    return None
-
 
 def tests():
     puzzle = Sudoku()
@@ -333,5 +287,5 @@ def tests():
     print("given:", puzzle.numSquaresFilledIn)
     puzzle.printAll()
 
-tests()
+# tests()
 # puzzleResearch()
