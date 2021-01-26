@@ -6,8 +6,6 @@ from suduko.models import Sudoku
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 
-
-
 puzzle = None
 
 @csrf_exempt
@@ -16,7 +14,9 @@ def sudoku_list(request):
     global puzzle
     if request.method == 'GET':
         if puzzle != None:
-            return JsonResponse(puzzle.getJSONBoard())
+            response = JsonResponse(puzzle.getJSONBoard())
+            response["Access-Control-Allow-Origin"] = "*"
+            return response
         else:
             return Response("Puzzle not created yet", status=status.HTTP_400_BAD_REQUEST)
     elif request.method == 'POST':
@@ -24,19 +24,24 @@ def sudoku_list(request):
         if difficulty > 0 and difficulty <= 5:
             puzzle = Sudoku()
             puzzle.makePuzzle(difficulty)
-        print("squares:", puzzle.numSquaresFilledIn)
-        return JsonResponse(puzzle.getJSONBoard())
+        print("Creating puzzle:")
+        puzzle.printAll()
+        response = JsonResponse(puzzle.getJSONBoard())
+        response["Access-Control-Allow-Origin"] = "*"
+        return response
 
 @csrf_exempt
 @api_view(['POST'])
 def sudoku_move(request):
     global puzzle
     if request.method == 'POST':
-        move = request.data["move"]
+        move = request.data
         if puzzle == None:
             return Response("Puzzle not created yet", status=status.HTTP_400_BAD_REQUEST)
         elif puzzle.isValidMove( move["num"], move["boxNum"], move["space"]):
             puzzle.setNum( move["num"], move["boxNum"], move["space"])
-            return JsonResponse(puzzle.getJSONBoard())
+            print("valid move")
+            return JsonResponse({'isValidMove': True, 'isGameOver': puzzle.isGameOver()})
         else:
-            return Response("Move is not valid", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            print("not valid move")
+            return JsonResponse({'isValidMove': False, 'isGameOver': puzzle.isGameOver()})
